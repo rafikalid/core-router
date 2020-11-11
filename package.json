@@ -1,0 +1,29 @@
+{
+	"name": "core-router",
+	"version": "0.0.1",
+	"description": "Browser side router to build web apps",
+	"main": "build/index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/rafikalid/await-ajax.git"
+	},
+	"keywords": [
+		"css",
+		"reactor",
+		"gridfw"
+	],
+	"author": "Khalid rafik",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/rafikalid/await-ajax/issues"
+	},
+	"homepage": "https://github.com/rafikalid/await-ajax#readme",
+	"devDependencies": {
+		"gulp-gridfw": "^1.0.0",
+		"gulp": "^4.0.2"
+	},
+	"dependencies": {}
+}
