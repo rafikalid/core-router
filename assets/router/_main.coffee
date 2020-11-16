@@ -102,20 +102,27 @@ class Router
 				- No logger service
 			""")
 		<%} %>
+		# Enable call @_back for fisrt time loaded
+		history.pushState {isRoot: yes}, '', @location.href
 		# prevent back and do an other action like closing popups
 		@_back= []
 		# Pop state
 		_popstateListener= (event)=>
 			# call callbacks
 			backCb= @_back
+			state= event.state
 			if cb= backCb.pop()
 				try
-					cb event
+					history.pushState state, '', @location.href
+					cb state
 				catch err
 					Core.fatalError 'Router', err
+			# If first page
+			else if state and state.isRoot
+				history.back() # quit root page
 			# GOTO
 			else
-				path= event.state?.path or document.location
+				path= state?.path or document.location
 				@goto path, HISTORY_BACK
 			return
 		window.addEventListener 'popstate', _popstateListener, off
@@ -302,9 +309,9 @@ class Router
 				else unless (doState is HISTORY_BACK) or (previousLocation and urlHref is previousLocation.href) # do not push if it's history back or same URL
 					historyState= path: urlHref
 					if doState is HISTORY_REPLACE
-						history?.replaceState historyState, '', urlHref
+						history.replaceState historyState, '', urlHref
 					else unless doState is HISTORY_NO_STATE
-						history?.pushState historyState, '', urlHref
+						history.pushState historyState, '', urlHref
 			# call listeners
 			if (wrappers= result.wrappers) and wrappers.length
 				wrapperI= 0
@@ -393,7 +400,6 @@ class Router
 	whenBack: (cb)->
 		throw new Error 'Expected 1 argument as function' unless arguments.length is 1 and typeof cb is 'function'
 		@_back.push cb
-		history.pushState {}, '', @location.href
 		this # chain
 	###*
 	 * Load route

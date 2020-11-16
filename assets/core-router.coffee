@@ -4,10 +4,7 @@
 <% var Core= false; %>
 do->
 	"use strict"
-	# Logger
-	Core=
-		fatalError: console.error.bind console, 'FATAL-ERROR'
-
+	#=include _utils.coffee
 	#=include router/_main.coffee
 
 	# Export interface

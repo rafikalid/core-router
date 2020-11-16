@@ -13,7 +13,7 @@ compiler= new GridfwGulp Gulp,
 module.exports= compiler
 	.js
 		name:	'API>> Compile Coffee files'
-		src:	'assets/core-ajax.coffee'
+		src:	'assets/core-router.coffee'
 		dest:	'build/'
 		watch:	'assets/**/*.coffee'
 		# data:	params
