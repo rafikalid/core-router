@@ -340,7 +340,7 @@ class Router
 					# Remove previous classes
 					if (referrerOptions= ctx.referrerOptions) and list= referrerOptions.toggleClasses
 						throw new Error "toggleClasses expected Array" unless _isArray list
-						htmlClassList.delete cl for cl in list
+						htmlClassList.remove cl for cl in list
 					# Add new Classes
 					if list= nodeGet.toggleClasses
 						throw new Error "toggleClasses expected Array" unless _isArray list
@@ -400,6 +400,12 @@ class Router
 	whenBack: (cb)->
 		throw new Error 'Expected 1 argument as function' unless arguments.length is 1 and typeof cb is 'function'
 		@_back.push cb
+		this # chain
+	###* remove back callback from "whenBack" ###
+	removeBack: (cb)->
+		queue= @_back
+		if ~(idx= queue.indexOf cb)
+			queue.splice idx, 1
 		this # chain
 	###*
 	 * Load route

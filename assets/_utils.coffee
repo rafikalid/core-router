@@ -26,5 +26,5 @@ _runOnLoad= (fn)->
 	if document.readyState is 'complete'
 		fn()
 	else
-		window.addEventListener 'load', fn, {passive:yes, once: yes}
+		window.addEventListener 'DOMContentLoaded', fn, {passive:yes, once: yes}
 	return
