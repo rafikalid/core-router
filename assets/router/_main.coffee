@@ -32,6 +32,24 @@ _resolveNodeInArray= (paramName, param, arr, upsert)->
 		node.param= paramName
 		arr.push paramRegex, paramName, node
 	return node
+###* Toggle HTML classes ###
+_toggleHtmlClassess= (ctx, nodeGet)->
+	if html= document.getElementsByTagName('html')[0]
+		htmlClassList= html.classList
+		# Remove previous classes
+		if (referrerOptions= ctx.referrerOptions) and list= referrerOptions.toggleClasses
+			throw new Error "toggleClasses expected Array" unless _isArray list
+			htmlClassList.remove.apply htmlClassList, list
+		# Add new Classes
+		if list= nodeGet.toggleClasses
+			throw new Error "toggleClasses expected Array" unless _isArray list
+			htmlClassList.add.apply htmlClassList, list
+	return
+# Load JSON from SERVER
+_getJSON= ->
+	Core.getJSON
+		url: @jsonPath
+		id: @router.id
 ###*
  * TREE
  * NODE:
@@ -102,24 +120,24 @@ class Router
 				- No logger service
 			""")
 		<%} %>
-		# Enable call @_back for fisrt time loaded
-		history.pushState {isRoot: yes}, '', @location.href
+		# # Enable call @_back for fisrt time loaded (prevent case of refresh)
+		# if document.referrer isnt document.location.href
+		# 	history.pushState {isRoot: yes}, '', document.location.href
 		# prevent back and do an other action like closing popups
 		@_back= []
 		# Pop state
 		_popstateListener= (event)=>
 			# call callbacks
-			backCb= @_back
 			state= event.state
-			if cb= backCb.pop()
-				try
-					history.pushState state, '', @location.href
-					cb state
-				catch err
-					Core.fatalError 'Router', err
-			# If first page
-			else if state and state.isRoot
-				history.back() # quit root page
+			if @_back.length # back callback
+				if cb= @_back.pop()
+					try
+						cb state
+					catch err
+						Core.fatalError 'Router', err
+				else
+					# Canceled cb, go back again
+					history.back()
 			# GOTO
 			else
 				path= state?.path or document.location
@@ -134,6 +152,7 @@ class Router
 		unless Core.defaultRouter
 			Core.defaultRouter= this
 			Core.goto= @goto.bind this
+			Core.goOut= @goOut.bind this
 		<% } %>
 		return
 
@@ -228,24 +247,38 @@ class Router
 			node.routeIndex= routeIndex
 			routeNode.get= node
 		return
+	###* Get route ###
+	getRoute: (path)->
+		path= (new URL path, @_baseURL).pathname
+		<% if(Core){ %>
+		unless result= @_cache.get path
+			result= @_resolvePath path
+			@_cache.set path, result
+		<% } else { %>
+		# Cache not enabled
+		result= @_resolvePath path
+		<%} %>
+		return result
 	###*
 	 * Goto
 	###
 	goto: (url, doState)->
 		try
 			# convert URL
-			url= (new URL url, @_baseURL) unless url instanceof URL
+			url= new URL url, @_baseURL
 			# previous
-			previousNode= @_node
 			if previousLocation= @location
 				previousPath= previousLocation.pathname
 				@referrer= previousLocation
+			previousNode= @_node
+			previousNodeOptions= previousNode and previousNode.get
 			# create context
 			path=		url.pathname
 			@location=	url
 			@href=	url.href
 			jsonURL= new URL(url)
 			jsonURL.searchParams.set 'type', 'json'
+			oldCtx= @ctx
 			@ctx= ctx=
 				isRoot:			doState is ROUTER_ROOT_PATH
 				url:			url
@@ -261,7 +294,10 @@ class Router
 				options:		null
 				# referrer
 				referrer:		@referrer
-				referrerOptions: previousNode and previousNode.node
+				referrerOptions: previousNodeOptions
+				# Methods
+				getJSON:	_getJSON
+				router:		this
 			# lookup for new Node
 			<% if(Core){ %>
 			unless result= @_cache.get path
@@ -286,21 +322,36 @@ class Router
 			while i < len
 				pName= resp[i++]
 				params[pName]= await paramMap[pName].convert resp[i++]
+			# prepare queryParams
+			qParams= []
+			url.searchParams.forEach (v, k)->
+				qParams.push k, v
+				return
 			# Query params
 			params= ctx.query
-			url.searchParams.forEach (v, k)->
-				# convert value
-				v= await p.convert(v) if p= paramMap[k]
+			i=0
+			len= qParams.length
+			while i < len
+				k= qParams[i++]
+				v= qParams[i++]
+				if p= paramMap[k]
+					v= await p.convert v
 				# add
 				if v2= params[k]
 					if _isArray v2 then v2.push v
 					else params[k]= [v2, v]
 				else params[k]= v
 			# call previous node out
-			if previousNode and (previousNodeOptions= previousNode.node)
-				previousNodeOptions= previousNodeOptions.get
-				await previousNodeOptions.out? ctx
-				await previousNodeOptions.outOnce? ctx if ctx.isNew
+			if previousNodeOptions
+				if typeof previousNodeOptions.out is 'function'
+					await previousNodeOptions.out oldCtx, ctx
+				if ctx.isNew
+					if typeof previousNodeOptions.outOnce is 'function'
+						await previousNodeOptions.outOnce oldCtx, ctx
+					# abort active xhr calls
+					<% if(Core){ %>
+					Core.ajax.abort @id
+					<% } %>
 			# push in history
 			urlHref= url.href
 			if history?
@@ -329,28 +380,25 @@ class Router
 		this # chain
 	_gotoRun: (result, ctx)->
 		if nodeGet= result.node?.get
-			if ctx.isNew
-				# abort active xhr calls
-				<% if(Core){ %>
-				Core.ajax.abort @id
-				<% } %>
-				# toggle <html> classes
-				if html= document.getElementsByTagName('html')[0]
-					htmlClassList= html.classList
-					# Remove previous classes
-					if (referrerOptions= ctx.referrerOptions) and list= referrerOptions.toggleClasses
-						throw new Error "toggleClasses expected Array" unless _isArray list
-						htmlClassList.remove cl for cl in list
-					# Add new Classes
-					if list= nodeGet.toggleClasses
-						throw new Error "toggleClasses expected Array" unless _isArray list
-						htmlClassList.add cl for cl in list
-				# Goto top
-				scrollTo 0, 0 if nodeGet.scrollTop
-				# Call current node in once
-				await nodeGet.once? ctx
-			# Call in
-			await nodeGet.in? ctx
+			return new Promise (res, rej)->
+				requestAnimationFrame (t)->
+					try
+						if ctx.isNew
+							# toggle <html> classes
+							_toggleHtmlClassess ctx, nodeGet
+							# Goto top
+							scrollTo 0, 0 if nodeGet.scrollTop
+							# Call current node in once
+							if typeof nodeGet.once is 'function'
+								await nodeGet.once ctx
+						# Call in
+						if typeof nodeGet.in is 'function'
+							await nodeGet.in ctx
+						res()
+					catch error
+						rej error
+					return
+				return
 		return
 	###*
 	 * Push URL to history without executing GOTO
@@ -381,6 +429,10 @@ class Router
 		else
 			@goto @location, ROUTER_RELOAD
 		this # chain
+	###* Goto URL external ###
+	goOut: (url)->
+		@_options.out url, true
+		return
 	repaint: ->
 		@goto @location
 		this
@@ -392,21 +444,37 @@ class Router
 	 * History back cb
 	###
 	back: ->
-		if (url= @referrer) and url.href.startsWith @_baseURL
-			history.back()
-		else
-			@goto ''
-	###* Execute a callback when history.back instead of changing view ###
+		history.back()
+		this # chain
+		# if (url= @referrer) and url.href.startsWith @_baseURL
+		# 	history.back()
+		# else
+		# 	@goto ''
+	###*
+	 * Execute a callback when history.back instead of changing view
+	 *  @return {cancel()} Object to cancel this callback
+	###
 	whenBack: (cb)->
 		throw new Error 'Expected 1 argument as function' unless arguments.length is 1 and typeof cb is 'function'
-		@_back.push cb
-		this # chain
-	###* remove back callback from "whenBack" ###
-	removeBack: (cb)->
-		queue= @_back
-		if ~(idx= queue.indexOf cb)
-			queue.splice idx, 1
-		this # chain
+		if history?
+			arr= @_back
+			idx= arr.length
+			arr.push cb
+			# push to history
+			history.pushState {back: idx}, '', @location.href
+			# Return interface to enable cancel
+			return {
+				cancel: ->
+					arr[idx]= null
+					return
+			}
+		else return {cancel: -> }
+	# ###* remove back callback from "whenBack" ###
+	# removeBack: (cb)->
+	# 	queue= @_back
+	# 	if ~(idx= queue.indexOf cb)
+	# 		queue.splice idx, 1
+	# 	this # chain
 	###*
 	 * Load route
 	###

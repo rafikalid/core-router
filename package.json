@@ -1,6 +1,6 @@
 {
 	"name": "core-router",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"description": "Browser side router to build web apps",
 	"main": "build/index.js",
 	"scripts": {
