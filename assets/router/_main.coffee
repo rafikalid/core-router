@@ -106,7 +106,10 @@ class Router
 		@_node= null # current node
 		@node= null
 		# URL
-		@referrer= @location= if document.referrer then new URL document.referrer else null
+		if document.referrer
+			@referrer= @location= new URL document.referrer
+		else
+			@location= new URL document.location
 		# Router id, used when calling ajax
 		@id= 'rtr-' + (ID_GEN++) # Router id
 		# Cache
